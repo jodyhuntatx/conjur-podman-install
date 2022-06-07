@@ -26,8 +26,6 @@ main() {
   fi
   #configure_networking
   follower_up
-  #cli_up	# uncomment if not configuring Follower on Leader node
-  smoke_test
 }
 
 #################
@@ -72,54 +70,6 @@ follower_up() {
 		evoke configure follower -p $CONJUR_LEADER_PORT
 
   echo "Follower configured."
-}
-
-#################
-# Included here in case there is a need to run a CLI container local to the Follower
-cli_up() {
-
-  # Bring up CLI node
-  # If docker-compose installed, replace "docker run..." 
-  #   with "docker-compose up -d cli"
-  $DOCKER run -d			\
-    --name $CLI_CONTAINER_NAME		\
-    --label role=cli			\
-    --restart unless-stopped		\
-    --security-opt seccomp=unconfined	\
-    --entrypoint sh			\
-    $CLI_IMAGE_NAME			\
-    -c "sleep infinity"
-
-  # if not relying on DNS - add entry for leader host name to cli container's /etc/hosts
-  if $NO_DNS; then
-    $DOCKER exec $CLI_CONTAINER_NAME \
-	bash -c "echo \"$CONJUR_LEADER_HOST_IP    $CONJUR_LEADER_HOSTNAME\" >> /etc/hosts"
-  fi
-
-}
-
-#################
-smoke_test() {
-  echo
-  echo
-  # Initialize CLI connection to Follower service (create .conjurrc and conjur-xx.pem cert)
-  $DOCKER exec $CLI_CONTAINER_NAME \
-	  rm -f /root/.conjurrc /root/conjur-$CONJUR_ACCOUNT.pem
-  $DOCKER exec $CLI_CONTAINER_NAME \
-    bash -c "echo yes | conjur init -u $CONJUR_FOLLOWER_URL -a $CONJUR_ACCOUNT"
-  # Login as admin
-  $DOCKER exec $CLI_CONTAINER_NAME \
-    conjur authn login -u admin -p $CONJUR_ADMIN_PASSWORD
-  echo
-  echo "Performing smoke test secret retrieval from Follower:"
-  echo -n "DB username: "
-  $DOCKER exec -it $CLI_CONTAINER_NAME		\
- 	conjur variable value secrets/db-username 
-  echo
-  echo -n "DB password: "
-  $DOCKER exec -it $CLI_CONTAINER_NAME		\
- 	conjur variable value secrets/db-password
-  echo
 }
 
 main "$@"

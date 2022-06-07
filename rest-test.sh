@@ -1,15 +1,20 @@
 #!/bin/bash 
 source ./conjur.config
 
-export CONJUR_AUTHN_LOGIN=test-host
-export CONJUR_AUTHN_API_KEY=$($DOCKER exec -it $CLI_CONTAINER_NAME     \
-        conjur host rotate_api_key -h $CONJUR_AUTHN_LOGIN | tr -d '\r\n')
+# As admin user, rotate the test-host API key
+export CONJUR_AUTHN_API_KEY=$CONJUR_ADMIN_PASSWORD
+export CONJUR_AUTHN_LOGIN=admin
+export NEW_HOST_API_KEY=$($CYBR conjur rotate-api-key -l host/test-host | tr -d '\r\n')
+
+# Set login creds to those for test-host
+export CONJUR_AUTHN_LOGIN=host/test-host
+export CONJUR_AUTHN_API_KEY=$NEW_HOST_API_KEY
 
 # Authenticates and gets or sets value of a specified variable.
 # NOTE: 'set' does not correctly handle values containing whitespace.
 
 if [ -z "${CONJUR_APPLIANCE_URL}" ]; then
-  echo "You must set CONJUR_APPLIANCE_URL and CONJUR_ACCOUNT in script."
+  echo "You must set CONJUR_APPLIANCE_URL and CONJUR_ACCOUNT before running this script."
   exit -1
 fi
 
@@ -30,8 +35,9 @@ main() {
 	exit -1
   esac
 
+  URLIFIED=$(urlify $CONJUR_AUTHN_LOGIN)
   response=$(curl -sk --data $CONJUR_AUTHN_API_KEY	\
-	$CONJUR_APPLIANCE_URL/authn/$CONJUR_ACCOUNT/host%2f$CONJUR_AUTHN_LOGIN/authenticate)
+	$CONJUR_APPLIANCE_URL/authn/$CONJUR_ACCOUNT/$URLIFIED/authenticate)
   AUTHN_TOKEN=$(echo $response | base64 | tr -d '\r\n')
   if [[ "$AUTHN_TOKEN" == "" ]]; then
     echo "Authentication failed..."

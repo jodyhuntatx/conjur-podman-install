@@ -2,29 +2,30 @@
 
 source ./conjur.config
 
+export CONJUR_AUTHN_LOGIN=admin
+export CONJUR_AUTHN_API_KEY=$CONJUR_ADMIN_PASSWORD
+
 # This script deletes running instances and brings up 
 #   initialized Conjur Leader & CLI nodes.
 
 #################
 main() {
-  teardown_conjur
+#  teardown_conjur
   if [[ "$1" == "stop" ]]; then
     exit -1
   fi
   #configure_networking
-  leader_up
-  ./cli-config.sh
+#  leader_up
+  cli_config
   load_demo_policy
   echo
   echo
   echo "Performing smoke test secret retrieval from Leader:"
   echo -n "DB username: "
-  $DOCKER exec -it $CLI_CONTAINER_NAME		\
- 	conjur variable value secrets/db-username 
+  $CYBR conjur get-secret -i secrets/db-username 
   echo
   echo -n "DB password: "
-  $DOCKER exec -it $CLI_CONTAINER_NAME		\
- 	conjur variable value secrets/db-password
+  $CYBR conjur get-secret -i secrets/db-password
   echo
 }
 
@@ -81,17 +82,19 @@ leader_up() {
   $DOCKER exec $CONJUR_LEADER_CONTAINER_NAME evoke seed follower conjur-follower > $FOLLOWER_SEED_FILE
 }
 
+############################
+cli_config() {
+  pushd ./bin
+    tar xvzf $(ls cybr*.gz)
+  popd
+}
 
 ############################
 load_demo_policy() {
   # Load policy & init variables
-  cat ./policy/demo-policy.yml			\
-  | $DOCKER exec -i $CLI_CONTAINER_NAME	\
-	conjur policy load root -
-  $DOCKER exec -it $CLI_CONTAINER_NAME	\
-  	conjur variable values add secrets/db-username "This-is-the-DB-username"
-  $DOCKER exec -it $CLI_CONTAINER_NAME	\
-  	conjur variable values add secrets/db-password $(openssl rand -hex 12)
+  $CYBR conjur append-policy -b root -f ./policy/demo-policy.yml
+  $CYBR conjur set-secret -i secrets/db-username -v "This-is-the-DB-username"
+  $CYBR	conjur set-secret -i secrets/db-password -v $(openssl rand -hex 12)
 }
 
 main "$@"
